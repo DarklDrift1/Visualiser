@@ -9,7 +9,7 @@ def rnd_color():
     return [int(256 * i) for i in colorsys.hls_to_rgb(h, l, s)]
 
 
-with open("musics\song.txt", "r") as f:
+with open("musics\\song.txt", "r") as f:
     for song in f:
         filename = "musics\\"+song
 
@@ -193,30 +193,35 @@ while running:
             b.x, b.y = circleX+radius*math.cos(math.radians(b.angle - 90)), circleY+radius*math.sin(math.radians(b.angle - 90))
             b.update_rect()
 
-
             poly.extend([(b.rect.points[3][0], b.rect.points[3][1]), (b.rect.points[2][0], b.rect.points[2][1])])
-
 
     poly = [(float(x), float(y)) for x, y in poly]
     #print(poly)
+
     pygame.draw.polygon(screen, poly_color, poly)
     pygame.draw.circle(screen, circle_color, (circleX, circleY), int(radius))
 
     current_time = pygame.mixer.music.get_pos() / 1000.0
+
     progress_bar_fill_width = int((current_time / song_length_seconds) * progress_bar_width)
     progress_bar_fill_rect = pygame.Rect(0, screen_h - progress_bar_height, progress_bar_fill_width, progress_bar_height)
+
     pygame.draw.rect(screen, (0, 255, 0), progress_bar_fill_rect)
     pygame.draw.rect(screen, (255, 255, 255), progress_bar_rect, 1)
+
     font = pygame.font.Font(None, 36)
+
     song_length_text1 = font.render(f"{int(current_time // 60)}:{int(current_time % 60):02}", True, (80, 80, 80))
     song_length_text2 = font.render(f"/", True, (160, 160, 160))
     song_length_text3 = font.render(f"{int(song_length_seconds // 60)}:{int(song_length_seconds % 60):02}", True, (255, 255, 255))
+
     screen.blit(song_length_text1, (10,10))
     screen.blit(song_length_text2, (60,10))
     screen.blit(song_length_text3, (70,10))
-    if 0 >= current_time >= song_length_seconds:
-        running = False
 
     pygame.display.flip()
+
+    if int(song_length_seconds) >= int(current_time):
+        pygame.quit()
 
 pygame.quit()
