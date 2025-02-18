@@ -1,0 +1,22 @@
+If the program shuts down and doesn't work please do the following steps IN ORDER:
+
+1. Download FFMPEG From this link "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip"
+
+2. Unzip it into the "ffmpeg" folder with the "bin" folder being a subfolder of ffmpeg
+
+3. Run the Program!
+
+If the issue isn't solved try these:
+
+1. Make sure Python 3.11 or newer is installed correctly
+
+2. Make sure all of the dependencies are installed correctly:
+
+    Librosa
+    Matplotlib
+    moviepy
+    pytubefix
+    pygame
+    pydub
+
+if not try running "DEPENDENCIES.BAT" to solve the problem!

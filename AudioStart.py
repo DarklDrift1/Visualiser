@@ -1,6 +1,8 @@
-from youtubedl import Download
+from dependencies.youtubedl import Download
 import subprocess
 import os
+from dependencies.GitHubDownloader import *
+
 
 def main():
     url = input("URL: ")
@@ -10,7 +12,7 @@ def main():
     downloadSong.start()
 
     fwav = fname.replace('.mp3', '.wav')
-    subprocess.call(['C:\\Users\\Tanulo\\Desktop\\NM\\Visualiser-main\\ffmpeg\\bin\\ffmpeg.exe', '-i', "musics\\"+fname, "musics\\"+fwav])
+    subprocess.call(['ffmpeg\\bin\\ffmpeg.exe', '-i', "musics\\"+fname, "musics\\"+fwav])
     os.remove("musics\\"+fname)
     with open('musics\\song.txt', 'w') as file:
         file.write(fwav)
