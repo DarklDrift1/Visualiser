@@ -10,9 +10,9 @@ def main():
     downloadSong.start()
 
     fwav = fname.replace('.mp3', '.wav')
-    subprocess.call(['ffmpeg', '-i', "musics\\"+fname, "musics\\"+fwav])
+    subprocess.call(['C:\\Users\\Tanulo\\Desktop\\NM\\Visualiser-main\\ffmpeg\\bin\\ffmpeg.exe', '-i', "musics\\"+fname, "musics\\"+fwav])
     os.remove("musics\\"+fname)
-    with open('musics\song.txt', 'w') as file:
+    with open('musics\\song.txt', 'w') as file:
         file.write(fwav)
     aType = input("Tipus (O/B): ")
     if aType == 'O':
