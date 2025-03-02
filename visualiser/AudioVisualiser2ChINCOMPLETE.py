@@ -1,28 +1,13 @@
-import multiprocessing.process
 from AudioAnalyzer import *
 import random
 import colorsys
 from pydub import AudioSegment
 import numpy as np
-from multiprocessing import Value,Process
+import multiprocessing as mp
+import pygame
 import math
 import time
-import json
-from mss import mss
-import win32api
-
-def minimize_all_windows():
-    win32api.keybd_event(0x5B, 0, ) # LWIN
-    win32api.keybd_event(0x44, 0, ) # D
-    win32api.keybd_event(0x5B, 0, 2) 
-    win32api.keybd_event(0x44, 0, 2)
-    with mss() as scr:
-        scr.shot()
-
-minimize_all_windows()
-
-import pygame
-
+import wave
 
 # Constants for visual settings
 CIRCLE_COLOR = (40, 40, 40)
@@ -38,14 +23,39 @@ FREQ_GROUPS = [
     {"start": 251, "stop": 2000, "count": 50},
     {"start": 2001, "stop": 6000, "count": 20},
 ]
-isInsomnia = False
 
 # Function to generate a random color
 def rnd_color():
     h, s, l = random.random(), 0.5 + random.random() / 2.0, 0.4 + random.random() / 5.0
-    if isInsomnia:
-        s = 1
     return [int(256 * i) for i in colorsys.hls_to_rgb(h, l, s)]
+
+def save_wav_channel(fn, wav, channel):
+    '''
+    Take Wave_read object as an input and save one of its
+    channels into a separate .wav file.
+    '''
+    # Read data
+    nch   = wav.getnchannels()
+    depth = wav.getsampwidth()
+    wav.setpos(0)
+    sdata = wav.readframes(wav.getnframes())
+
+    # Extract channel data (24-bit data not supported)
+    typ = { 1: np.uint8, 2: np.uint16, 4: np.uint32 }.get(depth)
+    if not typ:
+        raise ValueError("sample width {} not supported".format(depth))
+    if channel >= nch:
+        raise ValueError("cannot extract channel {} out of {}".format(channel+1, nch))
+    print ("Extracting channel {} out of {} channels, {}-bit depth".format(channel+1, nch, depth*8))
+    data = np.fromstring(sdata, dtype=typ)
+    ch_data = data[channel::nch]
+
+    # Save channel to a separate file
+    outwav = wave.open(fn, 'w')
+    outwav.setparams(wav.getparams())
+    outwav.setnchannels(1)
+    outwav.writeframes(ch_data.tostring())
+    outwav.close()
 
 # Load audio files
 filenames = []
@@ -54,18 +64,31 @@ with open("musics\\song.txt", "r", encoding='UTF-8') as f:
         filenames.append("musics\\" + song.strip('\n'))
 print(filenames)
 
+#wav = wave.open(filenames[0])
+#save_wav_channel('ch1.wav', wav, 0)
+#save_wav_channel('ch2.wav', wav, 1)
+audio = AudioSegment.from_file(filenames[0])
+left, right = audio.split_to_mono()
+left_balance_adjusted = left.apply_gain_stereo(+2, -99)
+right_balance_adjusted = right.apply_gain_stereo(-99, +2)
+file_handle = left_balance_adjusted.export("left.wav", format="wav")
+file_handle = right_balance_adjusted.export("right.wav", format="wav")
+print(left, right)
+
 # Initialize Pygame
 pygame.init()
 infoObject = pygame.display.Info()
 screen_w = infoObject.current_w
 screen_h = infoObject.current_h
 screen = pygame.display.set_mode([screen_w, screen_h], pygame.NOFRAME | pygame.SRCALPHA)
-current_song_index = 0
-current_song_title = filenames[current_song_index].strip("musics\\").strip(".wav")
 
 # Create audio analyzer
-analyzer = AudioAnalyzer()
-analyzer.load(filenames[current_song_index])
+analyzer_left = AudioAnalyzer()
+analyzer_left.load('left.wav')
+analyzer_right = AudioAnalyzer()
+analyzer_right.load('right.wav')
+#analyzer_right.show()
+#analyzer_left.show()
 
 # Initialize variables
 t = pygame.time.get_ticks()
@@ -81,19 +104,11 @@ radius_vel = 0
 min_decibel = -80
 max_decibel = 80
 
-def desaturate(surface, saturation_factor):
-    # Kép pixel adatainak lekérése
-    arr = pygame.surfarray.array3d(surface)
-    # Szürkeárnyalatú kép létrehozása
-    gray = np.dot(arr[..., :3], [0.2989, 0.5870, 0.1140])
-    # Szaturáció csökkentése
-    desaturated = gray[..., np.newaxis] + (arr - gray[..., np.newaxis]) * saturation_factor
-    return pygame.surfarray.make_surface(desaturated.astype(np.uint8))
-
-
 # Create audio bars
-bars = []
-tmp_bars = []
+bars_left = []
+tmp_bars_l = []
+bars_right = []
+tmp_bars_r = []
 ang = 0
 length = 0
 for group in FREQ_GROUPS:
@@ -126,12 +141,44 @@ for group in FREQ_GROUPS:
 
         length += 1
 
-    tmp_bars.append(g)
+    tmp_bars_l.append(g)
+
+for group in FREQ_GROUPS:
+
+    g = []
+
+    s = group["stop"] - group["start"]
+
+    count = group["count"]
+
+    reminder = s%count
+
+    step = int(s/count)
+
+    rng = group["start"]
+
+    for i in range(count):
+
+        arr = None
+
+        if reminder > 0:
+            reminder -= 1
+            arr = np.arange(start=rng, stop=rng + step + 2)
+            rng += step + 3
+        else:
+            arr = np.arange(start=rng, stop=rng + step + 1)
+            rng += step + 2
+
+        g.append(arr)
+
+        length += 1
+
+    tmp_bars_r.append(g)
 
 ang = 0
 angle_dt = 360/length
 
-for g in tmp_bars:
+for g in tmp_bars_l:
     gr = []
     for c in g:
         gr.append(RotatedAverageAudioBar(
@@ -140,39 +187,33 @@ for g in tmp_bars:
             c, (255, 0, 255), angle=ang, width=8, max_height=370
         ))
         ang += angle_dt
-    bars.append(gr)
-isSpecial = True
+    bars_left.append(gr)
 
-font = pygame.font.Font(None, 36)
-with open("Configs.json", 'r') as f:
-    json_data = json.load(f)
-    settings: dict = json_data.get("settings")
-isMoving,isTransparent,isOne,isPlaylist = settings.values()
-default_isMoving,default_isTransparent,default_isOne,default_isPlaylist = isMoving,isTransparent,isOne,isPlaylist
-isSakuya = False
-isMash = False
-
-if isSpecial:
-    isTransparent = False
-    if current_song_title == "Naktigonis - Catwhisker (Deepwoken OST)":
-        isMash = True
-        isMoving = True
-        transparent_surface = pygame.Surface((screen_w, screen_h), pygame.SRCALPHA)
-        transparent_surface.fill((0, 0, 0, 0))
-    elif current_song_title == "Night of Nights":
-        isSakuya = True
-        sakuya_pic = pygame.image.load("sakuya.png")
-        sakuya_head_pic = pygame.image.load("sakuya_head.png")
-
-background = pygame.image.load("monitor-1.png")
-sakuya_pic = pygame.image.load("sakuya.png")
+for g in tmp_bars_r:
+    gr = []
+    for c in g:
+        gr.append(RotatedAverageAudioBar(
+            screen_w // 2 + radius * math.cos(math.radians(ang - 90)),
+            screen_h // 2 + radius * math.sin(math.radians(ang - 90)),
+            c, (255, 0, 255), angle=ang, width=8, max_height=370
+        ))
+        ang += angle_dt
+    bars_right.append(gr)
 
 
+with open('barsLeft.txt', 'w') as f:
+    for bars in bars_left:
+        for bar in bars:
+            f.write(f"{bar.rng} \n")
+with open('barsRight.txt', 'w') as f:
+    for bars in bars_right:
+        for bar in bars:
+            f.write(f"{bar.rng} \n")
 
 # Load and play music
-songSecond = AudioSegment.from_file(filenames[current_song_index])
+songSecond = AudioSegment.from_file(filenames[0])
 song_length_seconds = songSecond.duration_seconds
-pygame.mixer.music.load(filenames[current_song_index])
+pygame.mixer.music.load(filenames[0])
 pygame.mixer.music.play(0)
 
 # Progress bar settings
@@ -180,31 +221,29 @@ progress_bar_width = screen_w
 progress_bar_height = 10
 progress_bar_rect = pygame.Rect(0, screen_h - progress_bar_height, progress_bar_width, progress_bar_height)
 
-
-
+# Function to handle song changes
+    #def song_controller():
+    #    current_song_index = 0
+    #    while True:
+    #        for event in pygame.event.get():
+    #            if event.type == pygame.KEYDOWN:
+    #                if event.key == pygame.K_SPACE:
+    #                    current_song_index = (current_song_index + 1) % len(filenames)
+    #        time.sleep(0.1)
+current_song_index = 0
+current_song_title = filenames[current_song_index].strip("music\\.wav")
 if __name__ == "__main__":
-    frame_count = 0
+    # Create and start the song controller process
+    #song_controller_process = mp.Process(target=song_controller)
+    #song_controller_process.start()
     current_song = current_song_index
-    slide_val = 0
-    slide_to_middle = False
-    index = 0
-
 
     # Main loop
     running = True
     while running:
         avg_bass = 0
-        poly = []
-        if isTransparent:
-            screen.blit(background, (0,0))
-        elif isMash:
-            if index == 10:
-                screen.blit(transparent_surface, (0, 0))
-            else:
-                index += 1
-                screen.blit(background, (0,0))
-        else:
-            screen.fill(CIRCLE_COLOR)
+        poly_left = []
+        poly_right = []
 
         # Calculate delta time
         t = pygame.time.get_ticks()
@@ -214,10 +253,10 @@ if __name__ == "__main__":
         
         if current_song_index != len(filenames):    
             if current_song_index != current_song:
-                isMoving,isTransparent,isOne,isPlaylist = default_isMoving,default_isTransparent,default_isOne,default_isPlaylist
+                time.sleep(2)
                 poly_color = POLYGON_DEFAULT_COLOR.copy()
                 pygame.mixer.music.unload()
-                analyzer.load(filenames[current_song_index])
+                analyzer_left.load(filenames[current_song_index])
                 pygame.mixer.music.load(filenames[current_song_index])
                 pygame.mixer.music.play(0)
                 print(f"Playing song: {filenames[current_song_index]} || {current_song_index} || {len(filenames)}")
@@ -225,22 +264,6 @@ if __name__ == "__main__":
                 song_length_seconds = songSecond.duration_seconds
                 current_song = current_song_index
                 current_song_title = filenames[current_song].strip("music\\.wav")
-                if isSpecial:
-                    isTransparent = False
-                    isSakuya = False
-                    isMash = False
-                    isMoving = False
-                    if current_song_title == "RXLZQ - Through the Screen":
-                        isMoving = True
-                        isMash = True
-                        screen.fill(CIRCLE_COLOR)
-                        screen.blit(background, (0,0))
-                        transparent_surface = pygame.Surface((screen_w, screen_h), pygame.SRCALPHA)
-                        transparent_surface.fill((0, 0, 0, 0))
-                    elif current_song_title == "Night of Nights":
-                        isSakuya = True
-                        sakuya_pic = pygame.image.load("sakuya.png")
-                        sakuya_head_pic = pygame.image.load("sakuya_head.png")
         else:
             break
 
@@ -253,16 +276,23 @@ if __name__ == "__main__":
             if event.type == pygame.QUIT:
                 running = False
 
+        # Clear the screen
+        screen.fill(CIRCLE_COLOR)
 
         # Update audio bars
-        for b1 in bars:
-            for b in b1:
-                b.update_all(deltaTime, pygame.mixer.music.get_pos() / 1000.0, analyzer)
+        for b1_l in bars_left:
+            for b_l in b1_l:
+                b_l.update_all(deltaTime, pygame.mixer.music.get_pos() / 1000.0, analyzer_left)
+
+        # Update audio bars
+        for b1_r in bars_right:
+            for b_r in b1_r:
+                b_r.update_all(deltaTime, pygame.mixer.music.get_pos() / 1000.0, analyzer_right)
 
         # Calculate average bass level
-        for b in bars[0]:
+        for b in bars_left[0]:
             avg_bass += b.avg
-        avg_bass /= len(bars[0])
+        avg_bass /= len(bars_left[0])
 
         # Adjust radius and color based on bass level
         if avg_bass > BASS_TRIGGER:
@@ -273,9 +303,6 @@ if __name__ == "__main__":
                 bass_trigger_started = 0
             if polygon_bass_color is None:
                 polygon_bass_color = rnd_color()
-                if isMoving == True:
-                    slide = MIN_RADIUS//2 + int(avg_bass * ((MAX_RADIUS - MIN_RADIUS) / (max_decibel - min_decibel)) + (MAX_RADIUS - MIN_RADIUS) + random.choice([-25,-10,-5,0,5,10,25]))
-                    slide_val += random.choice([slide,-slide])
             newr = MIN_RADIUS + int(avg_bass * ((MAX_RADIUS - MIN_RADIUS) / (max_decibel - min_decibel)) + (MAX_RADIUS - MIN_RADIUS))
             radius_vel = (newr - radius) / 0.15
             polygon_color_vel = [(polygon_bass_color[x] - poly_color[x]) / 0.15 for x in range(len(poly_color))]
@@ -291,11 +318,6 @@ if __name__ == "__main__":
             polygon_color_vel = [0, 0, 0]
             radius_vel = 0
             radius = MIN_RADIUS
-        
-
-        if -250 > slide_val or 250 < slide_val:
-            slide_val = 0
-
 
         # Update radius and color
         radius += radius_vel * deltaTime
@@ -304,29 +326,26 @@ if __name__ == "__main__":
             poly_color[x] = value
 
         # Update bar positions and draw polygons
-        for b1 in bars:
+        for b1 in bars_left:
             for b in b1:
-                b.x, b.y = (screen_w // 2) + radius * math.cos(math.radians(b.angle - 90)) - slide_val, screen_h // 2 + radius * math.sin(math.radians(b.angle - 90))
+                b.x, b.y = (screen_w // 2) + radius * math.cos(math.radians(b.angle - 90)), screen_h // 2 + radius * math.sin(math.radians(b.angle - 90))
                 b.update_rect()
-                poly.extend([(b.rect.points[3][0], b.rect.points[3][1]), (b.rect.points[2][0], b.rect.points[2][1])])
-        poly = [(float(x), float(y)) for x, y in poly]
-        pygame.draw.polygon(screen, poly_color, poly)
+                poly_left.extend([(b.rect.points[3][0], b.rect.points[3][1]), (b.rect.points[2][0], b.rect.points[2][1])])
+        poly_left = [(float(x), float(y)) for x, y in poly_left]
+        pygame.draw.polygon(screen, poly_color, poly_left)
 
         # Draw the circle
-        pygame.draw.circle(screen, CIRCLE_COLOR, (screen_w / 2 - slide_val, screen_h / 2), int(radius))
-
+        pygame.draw.circle(screen, CIRCLE_COLOR, (screen_w // 2, screen_h // 2), int(radius))
 
         # Draw progress bar
         current_time = pygame.mixer.music.get_pos() / 1000.0
         progress_bar_fill_width = int((current_time / song_length_seconds) * progress_bar_width)
         progress_bar_fill_rect = pygame.Rect(0, screen_h - progress_bar_height, progress_bar_fill_width, progress_bar_height)
-        if isSakuya:
-            screen.blit(sakuya_pic, (10, (screen_h/2) - (sakuya_pic.get_height())/2))
-            screen.blit(sakuya_head_pic, (progress_bar_fill_width - (sakuya_head_pic.get_width() / 2), screen_h - (sakuya_head_pic.get_height() - progress_bar_height) - 10))
         pygame.draw.rect(screen, (0, 255, 0), progress_bar_fill_rect)
         pygame.draw.rect(screen, (255, 255, 255), progress_bar_rect, 1)
 
         # Display time
+        font = pygame.font.Font(None, 36)
         song_length_text1 = font.render(f"{int(current_time // 60)}:{int(current_time % 60):02}", True, (255, 255, 255))
         current_song_text = font.render(f"{int(current_song+1)}/{len(filenames)}", True, (255,255,255))
         current_song_title_text = font.render(f"{str(current_song_title)}", True, (255,255,255))
@@ -336,17 +355,11 @@ if __name__ == "__main__":
         screen.blit(song_length_text1, (screen_w - song_length_text1.get_width() - song_length_text2.get_width() - 10, screen_h - song_length_text1.get_height() - 10))
         screen.blit(current_song_title_text, ((screen_w / 2) - (current_song_title_text.get_width() / 2), current_song_title_text.get_height() - 20))
 
-
         if int(current_time) >= int(song_length_seconds):
-            current_song_index += 1
+            break
 
         # Update the display
-        # Update desaturated surface every 5 frames
-        #if frame_count % 50 == 0:
-        #    desaturated_surface = desaturate(screen, 0.5)
-        #screen.blit(desaturated_surface, (0, 0))
         pygame.display.flip()
-        frame_count += 1
 
     # Quit Pygame
     pygame.quit()
