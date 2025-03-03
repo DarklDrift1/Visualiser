@@ -47,9 +47,14 @@ def rnd_color():
         s = 1
     return [int(256 * i) for i in colorsys.hls_to_rgb(h, l, s)]
 
+titles = []
+with open("musics\\songtitles.txt", 'r', encoding="UTF-8") as f:
+    for song in f:
+        titles.append(song.strip('\n'))
+
 # Load audio files
 filenames = []
-with open("musics\\song.txt", "r", encoding='UTF-8') as f:
+with open("musics\\songs.txt", "r", encoding='UTF-8') as f:
     for song in f:
         filenames.append("musics\\" + song.strip('\n'))
 print(filenames)
@@ -60,8 +65,9 @@ infoObject = pygame.display.Info()
 screen_w = infoObject.current_w
 screen_h = infoObject.current_h
 screen = pygame.display.set_mode([screen_w, screen_h], pygame.NOFRAME | pygame.SRCALPHA)
-current_song_index = 0
-current_song_title = filenames[current_song_index].strip("musics\\").strip(".wav")
+current_song_index = 8
+current_song_title = titles[current_song_index]
+current_song_hash = filenames[current_song_index]
 
 # Create audio analyzer
 analyzer = AudioAnalyzer()
@@ -152,15 +158,18 @@ default_isMoving,default_isTransparent,default_isOne,default_isPlaylist = isMovi
 isSakuya = False
 isMash = False
 
-if isSpecial:
+if isSpecial == True:
     isTransparent = False
-    if current_song_title == "Naktigonis - Catwhisker (Deepwoken OST)":
+    if current_song_title == "RXLZQ - Through the Screen":
         isMash = True
         isMoving = True
         transparent_surface = pygame.Surface((screen_w, screen_h), pygame.SRCALPHA)
         transparent_surface.fill((0, 0, 0, 0))
-    elif current_song_title == "Night of Nights":
+    elif current_song_title == "Night of Nights (Flowering nights remix)  By COOL&CREATEbeatMARIO":
         isSakuya = True
+        isMash = False
+        isTransparent = False
+        isMoving = False
         sakuya_pic = pygame.image.load("sakuya.png")
         sakuya_head_pic = pygame.image.load("sakuya_head.png")
 
@@ -224,7 +233,7 @@ if __name__ == "__main__":
                 songSecond = AudioSegment.from_file(filenames[current_song_index])
                 song_length_seconds = songSecond.duration_seconds
                 current_song = current_song_index
-                current_song_title = filenames[current_song].strip("music\\.wav")
+                current_song_title = titles[current_song].strip("music\\.wav")
                 if isSpecial:
                     isTransparent = False
                     isSakuya = False
@@ -237,7 +246,7 @@ if __name__ == "__main__":
                         screen.blit(background, (0,0))
                         transparent_surface = pygame.Surface((screen_w, screen_h), pygame.SRCALPHA)
                         transparent_surface.fill((0, 0, 0, 0))
-                    elif current_song_title == "Night of Nights":
+                    elif current_song_title == "Night of Nights (Flowering nights remix)  By COOL&CREATEbeatMARIO":
                         isSakuya = True
                         sakuya_pic = pygame.image.load("sakuya.png")
                         sakuya_head_pic = pygame.image.load("sakuya_head.png")
@@ -328,7 +337,7 @@ if __name__ == "__main__":
 
         # Display time
         song_length_text1 = font.render(f"{int(current_time // 60)}:{int(current_time % 60):02}", True, (255, 255, 255))
-        current_song_text = font.render(f"{int(current_song+1)}/{len(filenames)}", True, (255,255,255))
+        current_song_text = font.render(f"{int(current_song+1)}/{len(titles)}", True, (255,255,255))
         current_song_title_text = font.render(f"{str(current_song_title)}", True, (255,255,255))
         song_length_text2 = font.render(f"/{int(song_length_seconds // 60)}:{int(song_length_seconds % 60):02}", True, (128,128,128))
         screen.blit(current_song_text, (screen_w - current_song_text.get_width() - 10, screen_h - current_song_text.get_height() - song_length_text1.get_height() - 10))
