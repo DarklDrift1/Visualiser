@@ -12,11 +12,13 @@ If the issue isn't solved try these:
 
 2. Make sure all of the dependencies are installed correctly:
 
-    Librosa
-    Matplotlib
+    librosa
+    matplotlib
     moviepy
     pytubefix
     pygame
     pydub
+    threading
+    numpy
 
 if not try running "DEPENDENCIES.BAT" to solve the problem!

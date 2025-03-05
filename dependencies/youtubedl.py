@@ -6,14 +6,23 @@ class VideoDownloader:
         self.url = url
         self.isPlaylist = isPlaylist
         self.fname = fname
+        if not self.isPlaylist:
+            self.yt = YouTube(url)
+        self.vid_title = self.yt.title
 
-    def download(self, nurl):
+    def playlist_download(self, nurl):
         yt = YouTube(nurl)
         audio_stream = yt.streams.filter(only_audio=True).first()
         audio_stream.download(filename=self.fname,output_path=f"musics\\")
 
-    def start(self):
-        pass
+    def title(self):
+        return self.vid_title
+
+    def vid_download(self):
+        if self.isPlaylist:
+            return
+        audio_stream = self.yt.streams.filter(only_audio=True).first()
+        audio_stream.download(filename=self.fname,output_path=f"musics\\")
 
     def playlist_to_urls(self):
         p = Playlist(self.url)

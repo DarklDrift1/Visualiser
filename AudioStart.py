@@ -6,10 +6,10 @@ import hashlib
 hashtype = "MD5"
 illegal_chars = ('*','>','<','\\','/','|','?',':','"')
 
-def mainT():
+def main_playlist():
     uInput = str(input("URL (Playlist or Video): "))   
     fname = "song.mp3"
-    download = VideoDownloader(uInput,f"{fname}")
+    download = VideoDownloader(uInput,f"{fname}",True)
     urls,titles  = list(download.playlist_to_urls())
     playlist = list()
 
@@ -24,17 +24,38 @@ def mainT():
             for char in illegal_chars:
                 title = title.replace(char, "")
                 print(title)
-            download.download('https://www.youtube.com/watch?v='+video.get('url'))
+            download.playlist_download('https://www.youtube.com/watch?v='+video.get('url'))
             fwav = title+".wav"
-            subprocess.call(['ffmpeg', '-i', "musics\\"+fname, f"musics\\{fwav}"])
+            subprocess.call(['ffmpeg\\bin\ffmpeg.exe', '-i', "musics\\"+fname, f"musics\\{fwav}"])
             os.remove("musics\\"+fname)
             fwav = fwav.replace(".wav", "")
             f.write(f"{fwav}\n")
 
     folder_hash()
 
-    subprocess.call(['python', 'visualiser\\AudioVisualiser.py'])
+    subprocess.call(['python', 'visualiser\\game.py'])
     print("DONE...")
+
+def main_video():
+    uInput = str(input("URL (Playlist or Video): "))   
+    fname = "song.mp3"   
+    download = VideoDownloader(uInput,f"{fname}")
+    with open("musics\\songtitles.txt", 'w', encoding="UTF-8") as f:
+        title = download.title()
+        for char in illegal_chars:
+                title = title.replace(char, "")
+                print(title)
+        download.vid_download()
+        fwav = title+".wav"
+        subprocess.call(['ffmpeg\\bin\\ffmpeg.exe', '-i', f'musics\\{fname}', f"musics\\{fwav}"])
+        os.remove(f"musics\\{fname}")
+        fwav = fwav.replace('.wav', "")
+        f.write(f"{fwav}\n")
+        
+    folder_hash()
+
+    subprocess.call(['python', 'visualiser\\game.py'])
+
 
 def folder_hash():
 
@@ -57,4 +78,4 @@ def wav_to_hash(filth_path):
             file_hash.update(chunk)
     return file_hash.hexdigest()
 
-mainT()
+main_video()

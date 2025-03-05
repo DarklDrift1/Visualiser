@@ -1,43 +1,40 @@
-import multiprocessing.process
 from AudioAnalyzer import *
 import random
 import colorsys
 from pydub import AudioSegment
 import numpy as np
-from multiprocessing import Value,Process
 import math
 import time
 import json
 from mss import mss
-import win32api
+import win32api,win32gui,win32con
+import pygame
+from constants import *
 
 def minimize_all_windows():
     win32api.keybd_event(0x5B, 0, ) # LWIN
     win32api.keybd_event(0x44, 0, ) # D
     win32api.keybd_event(0x5B, 0, 2) 
     win32api.keybd_event(0x44, 0, 2)
+    time.sleep(2)
     with mss() as scr:
         scr.shot()
 
-minimize_all_windows()
+def find_and_focus_pygame_window():
+    # Definiáljuk a keresett ablak nevét
+    window_name = "pygame window"
 
-import pygame
+    # Keresés az ablakok között
+    hwnd = win32gui.FindWindow(None, window_name)
 
+    if hwnd:
+        # Ha megtaláltuk az ablakot, fókuszálunk rá
+        win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)  # Abla helyreállítása, ha minimalizálva van
+        win32gui.SetForegroundWindow(hwnd)  # Fókuszálás az ablakra
+        print(f"A '{window_name}' ablak fókuszálva lett.")
+    else:
+        print(f"A '{window_name}' ablak nem található.")
 
-# Constants for visual settings
-CIRCLE_COLOR = (40, 40, 40)
-POLYGON_DEFAULT_COLOR = [255, 255, 255]
-MIN_RADIUS = 100
-MAX_RADIUS = 150
-BASS_TRIGGER = -30
-
-# Frequency band definitions
-FREQ_GROUPS = [
-    {"start": 50, "stop": 100, "count": 12},
-    {"start": 120, "stop": 250, "count": 40},
-    {"start": 251, "stop": 2000, "count": 50},
-    {"start": 2001, "stop": 6000, "count": 20},
-]
 isInsomnia = False
 
 # Function to generate a random color
@@ -61,10 +58,17 @@ print(filenames)
 
 # Initialize Pygame
 pygame.init()
+minimize_all_windows()
 infoObject = pygame.display.Info()
 screen_w = infoObject.current_w
 screen_h = infoObject.current_h
 screen = pygame.display.set_mode([screen_w, screen_h], pygame.NOFRAME | pygame.SRCALPHA)
+font = pygame.font.Font(None, 36)
+loading_text = font.render("Loading", True, (255,255,255))
+screen.blit(loading_text, (0,0))
+pygame.display.flip()
+# Futtatjuk a funkciót
+find_and_focus_pygame_window()
 current_song_index = 8
 current_song_title = titles[current_song_index]
 current_song_hash = filenames[current_song_index]
@@ -88,12 +92,14 @@ min_decibel = -80
 max_decibel = 80
 
 def desaturate(surface, saturation_factor):
-    # Kép pixel adatainak lekérése
+    # Screen to Pixel Data
     arr = pygame.surfarray.array3d(surface)
-    # Szürkeárnyalatú kép létrehozása
+    # Grey scale
     gray = np.dot(arr[..., :3], [0.2989, 0.5870, 0.1140])
-    # Szaturáció csökkentése
+    # Saturation
+    global rdata
     desaturated = gray[..., np.newaxis] + (arr - gray[..., np.newaxis]) * saturation_factor
+    rdata = pygame.surfarray.make_surface(desaturated.astype(np.uint8))
     return pygame.surfarray.make_surface(desaturated.astype(np.uint8))
 
 
@@ -149,7 +155,6 @@ for g in tmp_bars:
     bars.append(gr)
 isSpecial = True
 
-font = pygame.font.Font(None, 36)
 with open("Configs.json", 'r') as f:
     json_data = json.load(f)
     settings: dict = json_data.get("settings")
@@ -163,8 +168,8 @@ if isSpecial == True:
     if current_song_title == "RXLZQ - Through the Screen":
         isMash = True
         isMoving = True
-        transparent_surface = pygame.Surface((screen_w, screen_h), pygame.SRCALPHA)
-        transparent_surface.fill((0, 0, 0, 0))
+        transparent_surface = pygame.Surface((screen_w, screen_h))
+        transparent_surface.fill((0, 0, 0))
     elif current_song_title == "Night of Nights (Flowering nights remix)  By COOL&CREATEbeatMARIO":
         isSakuya = True
         isMash = False
@@ -300,10 +305,6 @@ if __name__ == "__main__":
             polygon_color_vel = [0, 0, 0]
             radius_vel = 0
             radius = MIN_RADIUS
-        
-
-        if -250 > slide_val or 250 < slide_val:
-            slide_val = 0
 
 
         # Update radius and color
@@ -317,8 +318,8 @@ if __name__ == "__main__":
             for b in b1:
                 b.x, b.y = (screen_w // 2) + radius * math.cos(math.radians(b.angle - 90)) - slide_val, screen_h // 2 + radius * math.sin(math.radians(b.angle - 90))
                 b.update_rect()
-                poly.extend([(b.rect.points[3][0], b.rect.points[3][1]), (b.rect.points[2][0], b.rect.points[2][1])])
-        poly = [(float(x), float(y)) for x, y in poly]
+                poly.extend([(b.rect.points[2][0], b.rect.points[2][1]), (b.rect.points[1][0], b.rect.points[1][1])])
+        poly = [(np.float64(x), np.float64(y)) for x, y in poly]
         pygame.draw.polygon(screen, poly_color, poly)
 
         # Draw the circle
